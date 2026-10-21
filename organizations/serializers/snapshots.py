@@ -18,7 +18,7 @@ class CompanySnapshotSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Company
-        fields = ["id", "name", "code", "description", "is_active"]
+        fields = ["id", "name", "description", "is_active"]
         read_only_fields = fields
 
 class BranchSnapshotSerializer(serializers.ModelSerializer):
@@ -37,7 +37,7 @@ class BranchSnapshotSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Branch
-        fields = ["id", "company", "name", "code", "description", "is_active"]
+        fields = ["id", "company", "name", "description", "is_active"]
         read_only_fields = fields
 
 

@@ -1,12 +1,20 @@
 from django.core.exceptions import ValidationError
 from django.db import transaction
 from django.utils import timezone
+
 from access.registry import ROLE_REGISTRY
 from auditing.operations import schedule_audit_event
-from auditing.registry import AUDIT_ACTION_REGISTRY, AUDIT_CATEGORY_REGISTRY
+from auditing.registry import (
+    AUDIT_ACTION_REGISTRY,
+    AUDIT_CATEGORY_REGISTRY,
+)
+
 from .models import Branch, Company, UserCompanyAccess
 
-# Define your organization operations here.
+
+# ============================================================
+# COMPANY OPERATIONS
+# ============================================================
 
 
 @transaction.atomic
@@ -17,15 +25,22 @@ def create_company(validated_data, actor):
         Description:
         - Create a Dialoqo company owned by the authenticated administrative user.
         - Establish the company as a new tenant boundary.
-        - Record the creation through the centralized auditing subsystem.
+        - Automatically create a default branch named "Principal".
+        - Record company and branch creation through the centralized auditing subsystem.
 
         Notes:
         - The actor is persisted through the author fields.
-        - Audit metadata contains company configuration only.
-        - The audit event is persisted only after the surrounding database transaction commits successfully.
+        - Every new company receives one default branch.
+        - Company and branch creation occur in the same database transaction.
+        - If either operation fails, the entire transaction is rolled back.
+        - Audit events are persisted only after the transaction commits successfully.
     """
 
-    company = Company.objects.create(created_by=actor, updated_by=actor, **validated_data)
+    company = Company.objects.create(
+        created_by=actor,
+        updated_by=actor,
+        **validated_data,
+    )
 
     schedule_audit_event(
         category=AUDIT_CATEGORY_REGISTRY.ORGANIZATION,
@@ -37,9 +52,16 @@ def create_company(validated_data, actor):
         metadata={
             "company_id": company.id,
             "name": company.name,
-            "code": company.code,
             "is_active": company.is_active,
         },
+    )
+
+    create_branch(
+        company=company,
+        validated_data={
+            "name": "Principal",
+        },
+        actor=actor,
     )
 
     return company
@@ -61,10 +83,16 @@ def update_company(company, validated_data, actor):
         - The audit event is persisted only after the transaction commits successfully.
     """
 
-    locked_company = Company.objects.select_for_update().get(id=company.id)
+    locked_company = Company.objects.select_for_update().get(
+        id=company.id
+    )
 
     changed_fields = list(validated_data.keys())
-    previous_values = {field: getattr(locked_company, field) for field in changed_fields}
+
+    previous_values = {
+        field: getattr(locked_company, field)
+        for field in changed_fields
+    }
 
     for field, value in validated_data.items():
         setattr(locked_company, field, value)
@@ -72,7 +100,10 @@ def update_company(company, validated_data, actor):
     locked_company.updated_by = actor
     locked_company.save()
 
-    current_values = {field: getattr(locked_company, field) for field in changed_fields}
+    current_values = {
+        field: getattr(locked_company, field)
+        for field in changed_fields
+    }
 
     schedule_audit_event(
         category=AUDIT_CATEGORY_REGISTRY.ORGANIZATION,
@@ -107,14 +138,28 @@ def deactivate_company(company, actor):
         - Associated resource deactivation remains the responsibility of their corresponding subsystems.
     """
 
-    locked_company = Company.objects.select_for_update().get(id=company.id)
+    locked_company = Company.objects.select_for_update().get(
+        id=company.id
+    )
 
     if not locked_company.is_active:
-        raise ValidationError({"company": "Desactivación de empresa rechazada: la empresa ya se encuentra inactiva."})
+        raise ValidationError({
+            "company": (
+                "Desactivación de empresa rechazada: "
+                "la empresa ya se encuentra inactiva."
+            )
+        })
 
     locked_company.is_active = False
     locked_company.updated_by = actor
-    locked_company.save(update_fields=["is_active", "updated_by", "updated_at"])
+
+    locked_company.save(
+        update_fields=[
+            "is_active",
+            "updated_by",
+            "updated_at",
+        ]
+    )
 
     schedule_audit_event(
         category=AUDIT_CATEGORY_REGISTRY.ORGANIZATION,
@@ -126,12 +171,16 @@ def deactivate_company(company, actor):
         metadata={
             "company_id": locked_company.id,
             "name": locked_company.name,
-            "code": locked_company.code,
             "is_active": locked_company.is_active,
         },
     )
 
     return locked_company
+
+
+# ============================================================
+# BRANCH OPERATIONS
+# ============================================================
 
 
 @transaction.atomic
@@ -148,12 +197,19 @@ def create_branch(company, validated_data, actor):
         - Company ownership is resolved before this operation is called.
         - The company field is controlled by the backend.
         - The audit event includes both company and branch context.
+        - This operation is also used to create the default branch
+          when a new company is registered.
     """
 
     branch_data = dict(validated_data)
     branch_data.pop("company", None)
 
-    branch = Branch.objects.create(company=company, created_by=actor, updated_by=actor, **branch_data)
+    branch = Branch.objects.create(
+        company=company,
+        created_by=actor,
+        updated_by=actor,
+        **branch_data,
+    )
 
     schedule_audit_event(
         category=AUDIT_CATEGORY_REGISTRY.ORGANIZATION,
@@ -167,7 +223,6 @@ def create_branch(company, validated_data, actor):
             "branch_id": branch.id,
             "company_id": company.id,
             "name": branch.name,
-            "code": branch.code,
             "is_active": branch.is_active,
         },
     )
@@ -190,13 +245,22 @@ def update_branch(branch, validated_data, actor):
         - Previous and current non-sensitive configuration values are preserved for traceability.
     """
 
-    locked_branch = Branch.objects.select_for_update().select_related("company").get(id=branch.id)
+    locked_branch = (
+        Branch.objects
+        .select_for_update()
+        .select_related("company")
+        .get(id=branch.id)
+    )
 
     branch_data = dict(validated_data)
     branch_data.pop("company", None)
 
     changed_fields = list(branch_data.keys())
-    previous_values = {field: getattr(locked_branch, field) for field in changed_fields}
+
+    previous_values = {
+        field: getattr(locked_branch, field)
+        for field in changed_fields
+    }
 
     for field, value in branch_data.items():
         setattr(locked_branch, field, value)
@@ -204,7 +268,10 @@ def update_branch(branch, validated_data, actor):
     locked_branch.updated_by = actor
     locked_branch.save()
 
-    current_values = {field: getattr(locked_branch, field) for field in changed_fields}
+    current_values = {
+        field: getattr(locked_branch, field)
+        for field in changed_fields
+    }
 
     schedule_audit_event(
         category=AUDIT_CATEGORY_REGISTRY.ORGANIZATION,
@@ -240,14 +307,31 @@ def deactivate_branch(branch, actor):
         - The operation is rejected when the branch is already inactive.
     """
 
-    locked_branch = Branch.objects.select_for_update().select_related("company").get(id=branch.id)
+    locked_branch = (
+        Branch.objects
+        .select_for_update()
+        .select_related("company")
+        .get(id=branch.id)
+    )
 
     if not locked_branch.is_active:
-        raise ValidationError({"branch": "Desactivación de sucursal rechazada: la sucursal ya se encuentra inactiva."})
+        raise ValidationError({
+            "branch": (
+                "Desactivación de sucursal rechazada: "
+                "la sucursal ya se encuentra inactiva."
+            )
+        })
 
     locked_branch.is_active = False
     locked_branch.updated_by = actor
-    locked_branch.save(update_fields=["is_active", "updated_by", "updated_at"])
+
+    locked_branch.save(
+        update_fields=[
+            "is_active",
+            "updated_by",
+            "updated_at",
+        ]
+    )
 
     schedule_audit_event(
         category=AUDIT_CATEGORY_REGISTRY.ORGANIZATION,
@@ -261,12 +345,16 @@ def deactivate_branch(branch, actor):
             "branch_id": locked_branch.id,
             "company_id": locked_branch.company_id,
             "name": locked_branch.name,
-            "code": locked_branch.code,
             "is_active": locked_branch.is_active,
         },
     )
 
     return locked_branch
+
+
+# ============================================================
+# USER COMPANY ACCESS OPERATIONS
+# ============================================================
 
 
 @transaction.atomic
@@ -288,24 +376,65 @@ def grant_user_company_access(user, company, actor):
     """
 
     if user.role != ROLE_REGISTRY.MONITOR:
-        raise ValidationError({"user": "Asignación de acceso rechazada: el usuario debe tener el rol MONITOR."})
+        raise ValidationError({
+            "user": (
+                "Asignación de acceso rechazada: "
+                "el usuario debe tener el rol MONITOR."
+            )
+        })
 
     if not user.is_active:
-        raise ValidationError({"user": "Asignación de acceso rechazada: el monitor seleccionado se encuentra inactivo."})
+        raise ValidationError({
+            "user": (
+                "Asignación de acceso rechazada: "
+                "el monitor seleccionado se encuentra inactivo."
+            )
+        })
 
     if user.created_by_id != actor.id:
-        raise ValidationError({"user": "Asignación de acceso rechazada: el monitor seleccionado no pertenece al administrador autenticado."})
+        raise ValidationError({
+            "user": (
+                "Asignación de acceso rechazada: "
+                "el monitor seleccionado no pertenece "
+                "al administrador autenticado."
+            )
+        })
 
     if not company.is_active:
-        raise ValidationError({"company": "Asignación de acceso rechazada: la empresa seleccionada se encuentra inactiva."})
+        raise ValidationError({
+            "company": (
+                "Asignación de acceso rechazada: "
+                "la empresa seleccionada se encuentra inactiva."
+            )
+        })
 
     if company.created_by_id != actor.id:
-        raise ValidationError({"company": "Asignación de acceso rechazada: la empresa seleccionada no pertenece al administrador autenticado."})
+        raise ValidationError({
+            "company": (
+                "Asignación de acceso rechazada: "
+                "la empresa seleccionada no pertenece "
+                "al administrador autenticado."
+            )
+        })
 
-    if UserCompanyAccess.objects.filter(user=user, company=company, is_active=True).exists():
-        raise ValidationError({"access": "Asignación de acceso rechazada: el usuario ya tiene acceso activo a esta empresa."})
+    if UserCompanyAccess.objects.filter(
+        user=user,
+        company=company,
+        is_active=True,
+    ).exists():
+        raise ValidationError({
+            "access": (
+                "Asignación de acceso rechazada: "
+                "el usuario ya tiene acceso activo a esta empresa."
+            )
+        })
 
-    access = UserCompanyAccess.objects.create(user=user, company=company, created_by=actor, updated_by=actor)
+    access = UserCompanyAccess.objects.create(
+        user=user,
+        company=company,
+        created_by=actor,
+        updated_by=actor,
+    )
 
     schedule_audit_event(
         category=AUDIT_CATEGORY_REGISTRY.ORGANIZATION,
@@ -344,21 +473,49 @@ def revoke_user_company_access(access, actor):
         - Access revocation immediately removes the monitor's authorization for the company.
     """
 
-    locked_access = UserCompanyAccess.objects.select_for_update().select_related("user", "company").get(id=access.id)
+    locked_access = (
+        UserCompanyAccess.objects
+        .select_for_update()
+        .select_related("user", "company")
+        .get(id=access.id)
+    )
 
     if locked_access.company.created_by_id != actor.id:
-        raise ValidationError({"company": "Revocación de acceso rechazada: la empresa no pertenece al administrador autenticado."})
+        raise ValidationError({
+            "company": (
+                "Revocación de acceso rechazada: "
+                "la empresa no pertenece al administrador autenticado."
+            )
+        })
 
     if locked_access.user.created_by_id != actor.id:
-        raise ValidationError({"user": "Revocación de acceso rechazada: el monitor no pertenece al administrador autenticado."})
+        raise ValidationError({
+            "user": (
+                "Revocación de acceso rechazada: "
+                "el monitor no pertenece al administrador autenticado."
+            )
+        })
 
     if not locked_access.is_active:
-        raise ValidationError({"access": "Revocación de acceso rechazada: el acceso ya se encuentra inactivo."})
+        raise ValidationError({
+            "access": (
+                "Revocación de acceso rechazada: "
+                "el acceso ya se encuentra inactivo."
+            )
+        })
 
     locked_access.is_active = False
     locked_access.revoked_at = timezone.now()
     locked_access.updated_by = actor
-    locked_access.save(update_fields=["is_active", "revoked_at", "updated_by", "updated_at"])
+
+    locked_access.save(
+        update_fields=[
+            "is_active",
+            "revoked_at",
+            "updated_by",
+            "updated_at",
+        ]
+    )
 
     schedule_audit_event(
         category=AUDIT_CATEGORY_REGISTRY.ORGANIZATION,
