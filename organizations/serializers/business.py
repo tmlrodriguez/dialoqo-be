@@ -22,7 +22,7 @@ class CompanySerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Company
-        fields = ["id", "name", "code", "description", "is_active", "created_at", "updated_at", "created_by", "updated_by"]
+        fields = ["id", "name", "description", "is_active", "created_at", "updated_at", "created_by", "updated_by"]
         read_only_fields = ["id", "created_at", "updated_at", "created_by", "updated_by"]
 
 
@@ -43,7 +43,7 @@ class BranchSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Branch
-        fields = ["id", "company", "name", "code", "description", "is_active", "created_at", "updated_at", "created_by", "updated_by"]
+        fields = ["id", "company", "name", "description", "is_active", "created_at", "updated_at", "created_by", "updated_by"]
         read_only_fields = ["id", "created_at", "updated_at", "created_by", "updated_by"]
 
     def validate_company(self, value):

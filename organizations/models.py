@@ -19,7 +19,6 @@ class Company(TemporalMixin, LifeCycleMixin, AuthorMixin):
         - Companies should normally be deactivated instead of destructively deleted when historical records depend on them.
     """
     name = models.CharField(max_length=150)
-    code = models.CharField(max_length=50, unique=True)
     description = models.TextField(blank=True)
 
     class Meta:
@@ -48,18 +47,11 @@ class Branch(TemporalMixin, LifeCycleMixin, AuthorMixin):
     """
     company = models.ForeignKey(Company, blank=False, null=False, on_delete=models.PROTECT, related_name="branches")
     name = models.CharField(max_length=150)
-    code = models.CharField(max_length=50)
     description = models.TextField(blank=True)
 
     class Meta:
         db_table = "organizations_branch"
         ordering = ["company", "name"]
-        constraints = [
-            models.UniqueConstraint(
-                fields=["company", "code"],
-                name="unique_branch_code_per_company",
-            ),
-        ]
         indexes = [
             models.Index(fields=["company", "is_active"], name="idx_branch_company_active"),
             models.Index(fields=["company", "name"], name="idx_branch_company_name"),

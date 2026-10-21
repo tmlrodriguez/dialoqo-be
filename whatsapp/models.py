@@ -433,3 +433,70 @@ class ConversationReadState(TemporalMixin):
 
     def __str__(self):
         return f"{self.user_id} - {self.conversation_id}"
+
+
+class MetaCredential(TemporalMixin, LifeCycleMixin, AuthorMixin):
+    """
+        DOCSTRING: Meta Credential
+
+        Description:
+        - Store encrypted operational Meta credentials associated
+          with a specific WhatsApp Business Account.
+        - Support secure credential resolution for multiple
+          customer Business Portfolios.
+
+        Notes:
+        - Each WABA has at most one credential record.
+        - Access tokens are encrypted before persistence.
+        - Plaintext tokens must never be stored.
+        - Credentials are never exposed through serializers.
+        - Credential replacement preserves the record identity.
+        - Revocation clears the encrypted token.
+        - The existing global System User token remains available
+          for legacy integrations during development.
+    """
+
+    whatsapp_business_account = models.OneToOneField(
+        WhatsAppBusinessAccount,
+        on_delete=models.PROTECT,
+        related_name="meta_credential",
+    )
+
+    encrypted_access_token = models.TextField(
+        blank=True,
+        default="",
+    )
+
+    is_valid = models.BooleanField(
+        default=True,
+    )
+
+    last_validated_at = models.DateTimeField(
+        blank=True,
+        null=True,
+    )
+
+    expires_at = models.DateTimeField(
+        blank=True,
+        null=True,
+    )
+
+    class Meta:
+        db_table = "whatsapp_meta_credential"
+
+        indexes = [
+            models.Index(
+                fields=["is_active"],
+                name="idx_meta_credential_active",
+            ),
+            models.Index(
+                fields=["is_valid"],
+                name="idx_meta_credential_valid",
+            ),
+        ]
+
+    def __str__(self):
+        return (
+            f"Meta Credential - "
+            f"WABA {self.whatsapp_business_account_id}"
+        )
