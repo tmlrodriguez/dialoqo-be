@@ -49,7 +49,6 @@ class MonitoringBranchSerializer(serializers.ModelSerializer):
         fields = [
             "id",
             "name",
-            "code",
             "numbers",
         ]
         read_only_fields = fields
@@ -88,7 +87,6 @@ class MonitoringCompanySerializer(serializers.ModelSerializer):
         fields = [
             "id",
             "name",
-            "code",
             "branches",
         ]
         read_only_fields = fields

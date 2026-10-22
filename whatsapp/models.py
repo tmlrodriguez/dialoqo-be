@@ -34,6 +34,8 @@ class WhatsAppBusinessAccount(TemporalMixin, LifeCycleMixin, AuthorMixin):
 
     class Meta:
         db_table = "whatsapp_business_account"
+        verbose_name = "WhatsApp business account"
+        verbose_name_plural = "WhatsApp business accounts"
         ordering = ["display_name"]
         indexes = [
             models.Index(fields=["company", "is_active"], name="idx_waba_company_active"),
@@ -82,6 +84,8 @@ class WhatsAppMessageTemplate(TemporalMixin, LifeCycleMixin, AuthorMixin):
 
     class Meta:
         db_table = "whatsapp_message_template"
+        verbose_name = "WhatsApp message template"
+        verbose_name_plural = "WhatsApp message templates"
         ordering = ["name", "language"]
         constraints = [
             models.UniqueConstraint(
@@ -130,6 +134,8 @@ class WhatsAppNumber(TemporalMixin, LifeCycleMixin, AuthorMixin):
 
     class Meta:
         db_table = "whatsapp_number"
+        verbose_name = "WhatsApp number"
+        verbose_name_plural = "WhatsApp numbers"
         ordering = ["display_name"]
         indexes = [
             models.Index(fields=["company", "is_active"], name="idx_wa_number_company_active"),
@@ -153,9 +159,10 @@ class NumberAssignment(TemporalMixin, LifeCycleMixin, AuthorMixin):
 
         Notes:
         - Only one active assignment may exist for a WhatsApp number.
+        - Only one active assignment may exist for a member across all companies and branches.
         - Only active AccessUser records with role MEMBER may receive number assignments.
         - Assignment eligibility and administrative ownership are enforced by serializers and operations.
-        - Reassignment must close the existing assignment before creating the new assignment.
+        - Existing assignments must be explicitly closed before either the number or member can be assigned again.
         - Historical assignments must never be overwritten or deleted.
     """
 
@@ -166,12 +173,19 @@ class NumberAssignment(TemporalMixin, LifeCycleMixin, AuthorMixin):
 
     class Meta:
         db_table = "whatsapp_number_assignment"
+        verbose_name = "Number assignment"
+        verbose_name_plural = "Number assignments"
         ordering = ["-assigned_at"]
         constraints = [
             models.UniqueConstraint(
                 fields=["whatsapp_number"],
                 condition=Q(is_active=True),
                 name="unique_active_whatsapp_number_assignment",
+            ),
+            models.UniqueConstraint(
+                fields=["member"],
+                condition=Q(is_active=True),
+                name="unique_active_whatsapp_member_assignment",
             ),
             models.CheckConstraint(
                 condition=Q(unassigned_at__isnull=True) | Q(unassigned_at__gte=models.F("assigned_at")),
@@ -211,6 +225,8 @@ class Customer(TemporalMixin, LifeCycleMixin, AuthorMixin):
 
     class Meta:
         db_table = "whatsapp_customer"
+        verbose_name = "Customer"
+        verbose_name_plural = "Customers"
         ordering = ["phone_number"]
         constraints = [
             models.UniqueConstraint(
@@ -252,6 +268,8 @@ class Conversation(TemporalMixin, LifeCycleMixin, AuthorMixin):
 
     class Meta:
         db_table = "whatsapp_conversation"
+        verbose_name = "Conversation"
+        verbose_name_plural = "Conversations"
         ordering = ["-last_message_at", "-created_at"]
         constraints = [
             models.UniqueConstraint(
@@ -317,6 +335,8 @@ class Message(TemporalMixin, LifeCycleMixin, AuthorMixin):
 
     class Meta:
         db_table = "whatsapp_message"
+        verbose_name = "Message"
+        verbose_name_plural = "Messages"
         ordering = ["message_timestamp", "id"]
         indexes = [
             models.Index(fields=["conversation", "message_timestamp"], name="idx_message_conversation_time"),
@@ -378,6 +398,8 @@ class MediaAttachment(TemporalMixin, LifeCycleMixin, AuthorMixin):
 
     class Meta:
         db_table = "whatsapp_media_attachment"
+        verbose_name = "Media attachment"
+        verbose_name_plural = "Media attachments"
         constraints = [
             models.UniqueConstraint(
                 fields=["message", "meta_media_id"],
@@ -420,6 +442,8 @@ class ConversationReadState(TemporalMixin):
 
     class Meta:
         db_table = "whatsapp_conversation_read_state"
+        verbose_name = "Conversation read state"
+        verbose_name_plural = "Conversation read states"
         constraints = [
             models.UniqueConstraint(
                 fields=["conversation", "user"],
@@ -452,8 +476,8 @@ class MetaCredential(TemporalMixin, LifeCycleMixin, AuthorMixin):
         - Credentials are never exposed through serializers.
         - Credential replacement preserves the record identity.
         - Revocation clears the encrypted token.
-        - The existing global System User token remains available
-          for legacy integrations during development.
+        - The global System User token may authorize a manual connection
+          before its validated WABA credential is stored.
     """
 
     whatsapp_business_account = models.OneToOneField(
@@ -483,6 +507,8 @@ class MetaCredential(TemporalMixin, LifeCycleMixin, AuthorMixin):
 
     class Meta:
         db_table = "whatsapp_meta_credential"
+        verbose_name = "Meta credential"
+        verbose_name_plural = "Meta credentials"
 
         indexes = [
             models.Index(

@@ -25,6 +25,8 @@ class Position(TemporalMixin, LifeCycleMixin, AuthorMixin):
 
     class Meta:
         db_table = "members_position"
+        verbose_name = "Position"
+        verbose_name_plural = "Positions"
         ordering = ["name"]
         constraints = [
             models.UniqueConstraint(
@@ -69,6 +71,8 @@ class Member(TemporalMixin, LifeCycleMixin, AuthorMixin):
 
     class Meta:
         db_table = "members_member"
+        verbose_name = "Member"
+        verbose_name_plural = "Members"
         ordering = ["first_name", "last_name"]
         constraints = [
             models.UniqueConstraint(

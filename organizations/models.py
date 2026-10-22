@@ -23,6 +23,8 @@ class Company(TemporalMixin, LifeCycleMixin, AuthorMixin):
 
     class Meta:
         db_table = "organizations_company"
+        verbose_name = "Company"
+        verbose_name_plural = "Companies"
         ordering = ["name"]
         indexes = [
             models.Index(fields=["is_active"], name="idx_company_active"),
@@ -51,6 +53,8 @@ class Branch(TemporalMixin, LifeCycleMixin, AuthorMixin):
 
     class Meta:
         db_table = "organizations_branch"
+        verbose_name = "Branch"
+        verbose_name_plural = "Branches"
         ordering = ["company", "name"]
         indexes = [
             models.Index(fields=["company", "is_active"], name="idx_branch_company_active"),
@@ -81,6 +85,8 @@ class UserCompanyAccess(TemporalMixin, LifeCycleMixin, AuthorMixin):
 
     class Meta:
         db_table = "organizations_user_company_access"
+        verbose_name = "User company access"
+        verbose_name_plural = "User company access records"
         constraints = [
             models.UniqueConstraint(
                 fields=["user", "company"],
