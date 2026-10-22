@@ -30,6 +30,8 @@ class AccessUser(AbstractUser):
 
     class Meta:
         db_table = "access_user"
+        verbose_name = "Access user"
+        verbose_name_plural = "Access users"
 
     def __str__(self):
         return self.username

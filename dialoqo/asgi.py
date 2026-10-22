@@ -13,7 +13,7 @@ django_asgi_application = (
 )
 
 from whatsapp.routing import websocket_urlpatterns
-from whatsapp.websocket_auth import TokenQueryAuthMiddleware
+from whatsapp.realtime.auth import TokenQueryAuthMiddleware
 
 application = ProtocolTypeRouter(
     {

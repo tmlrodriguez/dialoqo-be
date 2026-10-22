@@ -1,5 +1,6 @@
 from django.urls import path
-from .consumers import WhatsAppMonitorConsumer
+
+from whatsapp.realtime.consumers import WhatsAppMonitorConsumer
 
 # Define your WebSocket URLs here.
 

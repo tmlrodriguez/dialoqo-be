@@ -3,9 +3,10 @@ import logging
 from celery import shared_task
 from django.db import DatabaseError
 
-from .media import MetaMediaError, store_media_attachment
-from .models import MediaAttachment
-from .operations import persist_whatsapp_webhook_payload
+from whatsapp.meta.media import MetaMediaError
+from whatsapp.models import MediaAttachment
+from whatsapp.operations.media import store_media_attachment
+from whatsapp.operations.webhooks import persist_whatsapp_webhook_payload
 
 
 logger = logging.getLogger(__name__)
@@ -102,6 +103,7 @@ def summarize_whatsapp_webhook_payload(payload):
 @shared_task(
     bind=True,
     autoretry_for=(DatabaseError,),
+    max_retries=5,
     retry_backoff=True,
     retry_backoff_max=60,
     retry_jitter=True,
@@ -126,6 +128,8 @@ def process_whatsapp_webhook_task(self, payload):
         - Only the authenticated JSON payload is passed to Celery.
         - Message uniqueness provides retry-safe idempotency.
         - Database failures are automatically retried.
+        - Delivery statuses arriving before outbound persistence are retried with bounded backoff.
+        - Unresolved message identifiers are reported after the retry limit instead of disappearing silently.
         - Complete webhook payloads are never printed.
         - Diagnostic logs exclude customer phone numbers and content.
     """
@@ -228,6 +232,25 @@ def process_whatsapp_webhook_task(self, payload):
         )
 
         raise
+
+    unmatched_statuses = result.get("unmatched_statuses", 0)
+
+    if unmatched_statuses:
+        if retry_count < self.max_retries:
+            logger.warning(
+                "[WHATSAPP WEBHOOK] STATUS RETRY | task_id=%s | unmatched=%s | retry=%s",
+                task_id,
+                unmatched_statuses,
+                retry_count,
+            )
+            raise self.retry(countdown=min(2 ** (retry_count + 1), 30))
+
+        logger.error(
+            "[WHATSAPP WEBHOOK] UNRESOLVED STATUSES | task_id=%s | unmatched=%s | retries=%s",
+            task_id,
+            unmatched_statuses,
+            retry_count,
+        )
 
     logger.info(
         "[WHATSAPP WEBHOOK] COMPLETED | "

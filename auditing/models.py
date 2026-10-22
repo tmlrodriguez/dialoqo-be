@@ -49,6 +49,8 @@ class AuditEvent(TemporalMixin):
 
     class Meta:
         db_table = "auditing_event"
+        verbose_name = "Audit event"
+        verbose_name_plural = "Audit events"
         ordering = ["-occurred_at", "-id"]
         indexes = [
             models.Index(fields=["company", "occurred_at"], name="idx_audit_company_time"),
